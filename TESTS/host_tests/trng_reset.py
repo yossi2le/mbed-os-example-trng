@@ -3,7 +3,9 @@ Copyright (c) 2018 ARM Limited
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
+
+http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,12 +19,13 @@ from mbed_host_tests.host_tests_runner.host_test_default import DefaultTestSelec
 
 DEFAULT_CYCLE_PERIOD      = 1.0
 MSG_VALUE_DUMMY           = '0'
-MSG_KEY_DEVICE_READY      = 'ready'
-MSG_KEY_DEVICE_FINISH     = 'finish'
-MSG_KEY_DEVICE_TEST_STEP1 = 'check_consistency_step1'
-MSG_KEY_DEVICE_TEST_STEP2 = 'check_consistency_step2'
+MSG_TRNG_READY            = 'ready'
+MSG_TRNG_BUFFER           = 'buffer'
+MSG_TRNG_FINISH           = 'finish'
+MSG_TRNG_TEST_STEP1       = 'check_step1'
+MSG_TRNG_TEST_STEP2       = 'check_step2'
 MSG_KEY_SYNC              = '__sync'
-MSG_KEY_TEST_SUITE_ENDED  = 'Test suite ended'
+MSG_KEY_TEST_SUITE_ENDED  = 'Test_suite_ended'
 
 class TRNGResetTest(BaseHostTest):
     """Test for the TRNG API.
@@ -33,6 +36,7 @@ class TRNGResetTest(BaseHostTest):
         self.reset = False
         self.finish = False
         self.suite_ended = False
+        self.buffer = 0
         cycle_s = self.get_config_item('program_cycle_s')
         self.program_cycle_s = cycle_s if cycle_s is not None else DEFAULT_CYCLE_PERIOD
         self.test_steps_sequence = self.test_steps()
@@ -40,9 +44,15 @@ class TRNGResetTest(BaseHostTest):
         self.test_steps_sequence.send(None)
 
     def setup(self):
-        self.register_callback(MSG_KEY_DEVICE_READY, self.cb_device_ready)
-        self.register_callback(MSG_KEY_DEVICE_FINISH, self.cb_device_finish)
+        self.register_callback(MSG_TRNG_READY, self.cb_device_ready)
+        self.register_callback(MSG_TRNG_BUFFER, self.cb_trng_buffer)
+        self.register_callback(MSG_TRNG_FINISH, self.cb_device_finish)
         self.register_callback(MSG_KEY_TEST_SUITE_ENDED, self.cb_device_test_suit_ended)
+
+    def cb_trng_buffer(self, key, value, timestamp):
+        """Store trng buffer from device for later loading
+        """
+        self.buffer = value
 
     def cb_device_ready(self, key, value, timestamp):
         """Acknowledge device rebooted correctly and feed the test execution
@@ -83,7 +93,7 @@ class TRNGResetTest(BaseHostTest):
         wait_for_communication = yield
 
         self.reset = False
-        self.send_kv(MSG_KEY_DEVICE_TEST_STEP1, MSG_VALUE_DUMMY)
+        self.send_kv(MSG_TRNG_TEST_STEP1, MSG_VALUE_DUMMY)
         time.sleep(self.program_cycle_s)
         self.send_kv(MSG_KEY_SYNC, MSG_VALUE_DUMMY)
 
@@ -91,11 +101,11 @@ class TRNGResetTest(BaseHostTest):
 
         if self.reset == False:
             raise RuntimeError('Phase 1: Platform did not reset as expected.')
-
+            
         """Test step 2 (After reset)
         """
         self.finish = False
-        self.send_kv(MSG_KEY_DEVICE_TEST_STEP2, MSG_VALUE_DUMMY)
+        self.send_kv(MSG_TRNG_TEST_STEP2, self.buffer)
         time.sleep(self.program_cycle_s)
 
         wait_for_communication = yield

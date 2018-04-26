@@ -18,127 +18,110 @@
 #include "unity/unity.h"
 #include "utest/utest.h"
 #include "hal/trng_api.h"
+#include "base64b.h"
 #include <stdio.h>
 
 extern "C" {
 #include "lzf.h"
 }
 
-#define LEN 512
-#define COMPRESS_TEST_TH_PERCENTS 99
+#define MSG_VALUE_DUMMY                 "0"
+#define MSG_VALUE_LEN                   64
+#define MSG_KEY_LEN                     32
 
-#define MSG_VALUE_DUMMY "0"
-#define MSG_VALUE_LEN 32
-#define MSG_KEY_LEN 32
+#define BUFFER_LEN                      (MSG_VALUE_LEN/2)
+#define COMPRESS_TEST_PERCENTAGE        99
 
-#define MSG_KEY_DEVICE_READY "ready"
-#define MSG_KEY_DEVICE_FINISH "finish"
-//#define MSG_KEY_TRNG_BUFFER "buffer"
+#define MSG_TRNG_READY                  "ready"
+#define MSG_TRNG_FINISH                 "finish"
+#define MSG_TRNG_BUFFER                 "buffer"
 
-#define MSG_KEY_DEVICE_TEST_STEP1 "check_consistency_step1"
-#define MSG_KEY_DEVICE_TEST_STEP2 "check_consistency_step2"
-#define MSG_KEY_DEVICE_TEST_SUITE_ENDED "Test suite ended"
-
-//#if defined(DEVICE_TRNG)
+#define MSG_TRNG_TEST_STEP1             "check_step1"
+#define MSG_TRNG_TEST_STEP2             "check_step2"
+#define MSG_TRNG_TEST_SUITE_ENDED       "Test_suite_ended"
 
 using namespace utest::v1;
 
-unsigned char htab[32][32] = {0};
-trng_t trng_obj;
-unsigned int output_buf_len = (unsigned int)((LEN * COMPRESS_TEST_TH_PERCENTS) / 100);
-uint8_t input_buf[LEN * 2] = {0};
-
-static void compress_and_compare(char * step)
+static void compress_and_compare(char * key, char * value)
 {
-    uint8_t output_buf[LEN] = {0};
-    size_t input_buf_len = 0, temp_size = 0, trng_len = LEN;
-    uint8_t * temp_in_buf = input_buf;
-    int ret = 0;
+    trng_t trng_obj;
+    uint8_t out_comp_buf[BUFFER_LEN] = {0}, buffer[BUFFER_LEN] = {0}, input_buf[BUFFER_LEN * 2] = {0};
+    size_t input_buf_len = 0, temp_size = 0, trng_len = BUFFER_LEN;
+    uint8_t * temp_in_buf = NULL;
+    int trng_res = 0;
+    unsigned int comp_res = 0;
+    unsigned char htab[32][32] = {0};
 
-    /*FILE *fd = fopen("file", "w+");
-    size_t res = fwrite(input_buf, 1, LEN, fd);
-    TEST_ASSERT_EQUAL(LEN, res);
-    res = fclose(fd);*/
+    unsigned int out_comp_buf_len = (unsigned int)((BUFFER_LEN * COMPRESS_TEST_PERCENTAGE) / 100);
+
+    /*At the begining of step 2 load trng buffer from dtep 1*/
+    if (strcmp(key, MSG_TRNG_TEST_STEP2) == 0)
+    {
+        string str(b64decode((const void *)value, BUFFER_LEN * 2));
+        memcpy(input_buf, str.c_str(), BUFFER_LEN * 2);
+        temp_in_buf = input_buf + BUFFER_LEN;
+    }
+    else if (strcmp(key, MSG_TRNG_TEST_STEP1) == 0)
+    {
+        temp_in_buf = buffer;
+    }
 
     trng_init(&trng_obj);
 
-    unsigned int compressResult = lzf_compress((const void *)input_buf, 
-                                               (unsigned int)trng_len, 
-                                               (void *)output_buf, 
-                                               output_buf_len, 
-                                               (unsigned char **)htab);
-
-    // compressResult equals to 0 means that the compress function wasn't able to fit the compressed pBufIn
-    // into pBufOut (which is threshold % of pBufIn), this means that the random function did the job good.
-    if (compressResult > 0) {
-        printf("1 compression worked - test fail\n");
-    }
-    else
-    {
-        printf("1 compression didnt worked - test success\n");
-        uint8_t print[10] = {0};
-        memcpy(print, input_buf, 10);
-        printf("input_buf 10 bytes = %s\n", print);
-    }
-
-    printf("compress_and_compare - start\n");
+    /*Fill buffer with trng values*/
     while (true)
     {
-        ret = trng_get_bytes(&trng_obj, temp_in_buf, trng_len, &input_buf_len);
-        if (ret > 0) 
-        {
-            printf("trng_get_bytes error!\n");
-            break;
-        }
+        trng_res = trng_get_bytes(&trng_obj, temp_in_buf, trng_len, &input_buf_len);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(0, trng_res, "trng_get_bytes error!");
         temp_size += input_buf_len;
         temp_in_buf += input_buf_len;
         trng_len -= input_buf_len;
-        printf("input_buf_len = %d\n", input_buf_len);
-        if (temp_size == LEN)
+        if (temp_size == BUFFER_LEN)
         {
-            printf("trng_get_bytes finish success!\n");
             break;
         }
     }
 
-    temp_in_buf = NULL;
     trng_free(&trng_obj);
 
-    printf("compress_and_compare - htab\n");
-    
-    compressResult = lzf_compress((const void *)input_buf, 
-                                    (unsigned int)input_buf_len, 
-                                    (void *)output_buf, 
-                                    output_buf_len, 
-                                    (unsigned char **)htab);
-
-    // compressResult equals to 0 means that the compress function wasn't able to fit the compressed pBufIn
-    // into pBufOut (which is threshold % of pBufIn), this means that the random function did the job good.
-    if (compressResult > 0) {
-        printf("compression worked - test fail\n");
-    }
-    else
+    /*Check if the trng buffer can be compressed - if it can the test will fail*/
+    if (strcmp(key, MSG_TRNG_TEST_STEP1) == 0)
     {
-        printf("compression didnt worked - test success\n");
+        comp_res = lzf_compress((const void *)buffer, 
+                                (unsigned int)sizeof(buffer), 
+                                (void *)out_comp_buf, 
+                                out_comp_buf_len, 
+                                (unsigned char **)htab);
     }
-    printf("compress_and_compare - end\n");
+    else if (strcmp(key, MSG_TRNG_TEST_STEP2) == 0)
+    {
+        comp_res = lzf_compress((const void *)input_buf, 
+                                (unsigned int)sizeof(input_buf), 
+                                (void *)out_comp_buf, 
+                                out_comp_buf_len, 
+                                (unsigned char **)htab);
+    }
 
-    TEST_ASSERT_EQUAL(0, ret);
+    temp_in_buf = NULL;
 
-     if (strcmp(step, MSG_KEY_DEVICE_TEST_STEP1) == 0)
-     {
-         printf("in compress_and_compare - MSG_KEY_DEVICE_TEST_STEP1 - reset!\n");
-         //greentea_send_kv(MSG_KEY_TRNG_BUFFER, input_buf);
-         system_reset();
-         TEST_ASSERT_MESSAGE(false, "system_reset() did not reset the device as expected.");
-     }
+    TEST_ASSERT_EQUAL_UINT_MESSAGE(0, comp_res, "compression of trng buffer succeeded - test fail!");
+    printf("compression of trng buffer did not succeeded - trng is successful!\n");
+
+    /*At the end of step 1 store trng buffer and reset the device*/
+    if (strcmp(key, MSG_TRNG_TEST_STEP1) == 0)
+    {
+        string str(base64_encode((const unsigned char *)buffer, sizeof(buffer)));
+        greentea_send_kv(MSG_TRNG_BUFFER, (const char *)str.c_str());
+        system_reset();
+        TEST_ASSERT_MESSAGE(false, "system_reset() did not reset the device as expected.");
+    }
 
     return;
 }
 
 void generate_derived_key_reset_test()
 {
-    greentea_send_kv(MSG_KEY_DEVICE_READY, MSG_VALUE_DUMMY);
+    greentea_send_kv(MSG_TRNG_READY, MSG_VALUE_DUMMY);
 
     static char key[MSG_KEY_LEN + 1] = { };
     static char value[MSG_VALUE_LEN + 1] = { };
@@ -147,20 +130,18 @@ void generate_derived_key_reset_test()
 
     greentea_parse_kv(key, value, MSG_KEY_LEN, MSG_VALUE_LEN);
 
-    if (strcmp(key, MSG_KEY_DEVICE_TEST_STEP1) == 0)
+    if (strcmp(key, MSG_TRNG_TEST_STEP1) == 0)
     {
-        printf("******MSG_KEY_DEVICE_TEST_STEP1*****\n");
-        compress_and_compare(MSG_KEY_DEVICE_TEST_STEP1);
+        printf("******MSG_TRNG_TEST_STEP1*****\n");
+        compress_and_compare(key, value);
         return generate_derived_key_reset_test();
     }
 
-    if (strcmp(key, MSG_KEY_DEVICE_TEST_STEP2) == 0)
+    if (strcmp(key, MSG_TRNG_TEST_STEP2) == 0)
     {
-        printf("******MSG_KEY_DEVICE_TEST_STEP2*****\n");
-        compress_and_compare(MSG_KEY_DEVICE_TEST_STEP2);
+        printf("******MSG_TRNG_TEST_STEP2*****\n");
+        compress_and_compare(key, value);
     }
-
-    printf("here4\n");
 }
 
 utest::v1::status_t greentea_failure_handler(const Case *const source, const failure_t reason) {
@@ -183,7 +164,7 @@ Specification specification(greentea_test_setup, cases, greentea_test_teardown_h
 int main()
 {
     bool ret = !Harness::run(specification);
-    greentea_send_kv(MSG_KEY_DEVICE_TEST_SUITE_ENDED, MSG_VALUE_DUMMY);
+    greentea_send_kv(MSG_TRNG_TEST_SUITE_ENDED, MSG_VALUE_DUMMY);
 
     return ret;
 }
