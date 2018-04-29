@@ -6,9 +6,7 @@ TRNG test example for Mbed OS
 
 This is a test example of an application that uses the TRNG APIs.
 
-TRNG is true random number generator and is supported by numorous devices.
-
-The application invokes the TRNG APIs and prints the results after each such invocation. 
+The application invokes the TRNG APIs and prints the results after each such invocation, the test is composed out of two parts: the first, generate a trng buffer and try to compress it, if compressession is successful the trng does not output real random data, at the end of first part we will reset the device for the second part, in this part we will again generate a trng buffer to see that the same trng output is not generated.
 
 ## Required hardware
 * An [FRDM-K64F](http://os.mbed.com/platforms/FRDM-K64F/) development board.
@@ -39,7 +37,7 @@ Although the board shown in this examples are K64F, the example should work on a
     For example, for `K64F` with `GCC`:
 
     ```
-    mbed test -t GCC_ARM -m K64F -n ************* test-basic-trng **************
+    mbed test -t GCC_ARM -m K64F -n tests-trng-basic
     ```
 
  4. The test should run and display a series of results following the StoragLite API invocations.

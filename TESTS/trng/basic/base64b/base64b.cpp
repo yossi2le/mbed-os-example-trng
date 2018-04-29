@@ -48,14 +48,14 @@ string base64_encode(const unsigned char *src, size_t len)
         if (end - in == 1) 
         {
             *pos++ = b64_table[(in[0] & 0x03) << 4];
-            *pos++ = '*';
+            *pos++ = '=';
         }
         else 
         {
             *pos++ = b64_table[((in[0] & 0x03) << 4) | (in[1] >> 4)];
             *pos++ = b64_table[(in[1] & 0x0f) << 2];
         }
-        *pos++ = '*';
+        *pos++ = '=';
     }
 
     return output;
@@ -64,7 +64,7 @@ string base64_encode(const unsigned char *src, size_t len)
 string b64decode(const void *src, const size_t len)
 {
     unsigned char *p = (unsigned char *)src;
-    int pad = len > 0 && (len % 4 || p[len - 1] == '*');
+    int pad = len > 0 && (len % 4 || p[len - 1] == '=');
     const size_t L = ((len + 3) / 4 - pad) * 4;
     string str(L / 4 * 3 + pad, '\0');
 
@@ -80,7 +80,7 @@ string b64decode(const void *src, const size_t len)
         int n = b64_index[p[L]] << 18 | b64_index[p[L + 1]] << 12;
         str[str.size() - 1] = n >> 16;
 
-        if (len > L + 2 && p[L + 2] != '*')
+        if (len > L + 2 && p[L + 2] != '=')
         {
             n |= b64_index[p[L + 2]] << 6;
             str.push_back(n >> 8 & 0xFF);

@@ -25,7 +25,7 @@ MSG_TRNG_FINISH           = 'finish'
 MSG_TRNG_TEST_STEP1       = 'check_step1'
 MSG_TRNG_TEST_STEP2       = 'check_step2'
 MSG_KEY_SYNC              = '__sync'
-MSG_KEY_TEST_SUITE_ENDED  = 'Test_suite_ended'
+MSG_KEY_TEST_SUITE_ENDED  = 'Test suite ended'
 
 class TRNGResetTest(BaseHostTest):
     """Test for the TRNG API.
@@ -50,7 +50,7 @@ class TRNGResetTest(BaseHostTest):
         self.register_callback(MSG_KEY_TEST_SUITE_ENDED, self.cb_device_test_suit_ended)
 
     def cb_trng_buffer(self, key, value, timestamp):
-        """Store trng buffer from device for later loading
+        """Acknowledge device rebooted correctly and feed the test execution
         """
         self.buffer = value
 
