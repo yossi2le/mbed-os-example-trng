@@ -13,6 +13,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+"""
+This script is the host script for trng test sequence, it send the 
+step signaling sequence and receive and transmit data to the device after 
+reset if necesarry (default lading and storing while reseting the device
+is NVstore, in case NVstore isn't enabled we'll use current infrastructure,
+for more details see main.cpp file)
+"""
+
 import time
 from mbed_host_tests import BaseHostTest
 from mbed_host_tests.host_tests_runner.host_test_default import DefaultTestSelector
@@ -43,12 +51,14 @@ class TRNGResetTest(BaseHostTest):
         # Advance the coroutine to it's first yield statement.
         self.test_steps_sequence.send(None)
 
+    #define callback functions for msg handling
     def setup(self):
         self.register_callback(MSG_TRNG_READY, self.cb_device_ready)
         self.register_callback(MSG_TRNG_BUFFER, self.cb_trng_buffer)
         self.register_callback(MSG_TRNG_FINISH, self.cb_device_finish)
         self.register_callback(MSG_KEY_TEST_SUITE_ENDED, self.cb_device_test_suit_ended)
 
+    #receive sent data from device before reset
     def cb_trng_buffer(self, key, value, timestamp):
         """Acknowledge device rebooted correctly and feed the test execution
         """
@@ -87,8 +97,9 @@ class TRNGResetTest(BaseHostTest):
         except (StopIteration, RuntimeError) as exc:
             self.notify_complete(False)
 
+    #define test steps and actions
     def test_steps(self):
-        """Test step 1 (16 byte key test)
+        """Test step 1
         """
         wait_for_communication = yield
 
