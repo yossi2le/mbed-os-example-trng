@@ -14,6 +14,26 @@
 * limitations under the License.
 */
 
+/*
+* The test is based on the assumption that trng will generate random data, random so 
+* there will not be any similar patterns in it, that kind of data will be impossible to
+* compress, if compression will acuur the test will result in failure.
+* The test is composed out of two parts: 
+* the first, generate a trng buffer and try to compress it, at the end of first part 
+* we will reset the device for the second part, in this part we will again generate a 
+* trng buffer to see that the same trng output is not generated, the new trng data will
+* be concatenated to the trng data from the first part and then try to compress it 
+* together, if there are similar patterns the compression will succeed.
+*
+* We need to store and load the first part data before and after reset, the mechanism 
+* we chose is NVstore, mainly because its simplicity and the fact it is not platform 
+* dependent, but in case a specific board does not support NVstore we will use the 
+* mbed greentea platform for sending and receving the data from and to the device to 
+* the host running the test, the problem with this mechanism is that it doesn't handle
+* well certain characters, especially non ASCII ones, so we used the base64 algorithm
+* to ensure all characters will be transmitted correctly.
+*/
+
 #include "greentea-client/test_env.h"
 #include "unity/unity.h"
 #include "utest/utest.h"
@@ -23,6 +43,7 @@
 
 #include "nvstore.h"
 
+/*Include LZF Compressor librart */
 extern "C" {
 #include "lzf.h"
 }
@@ -31,8 +52,8 @@ extern "C" {
 #define MSG_VALUE_LEN                   128
 #define MSG_KEY_LEN                     32
 
-#define BUFFER_LEN                      (MSG_VALUE_LEN/2)
-#define COMPRESS_TEST_PERCENTAGE        99
+#define BUFFER_LEN                      (MSG_VALUE_LEN/2)           //size of first step data, and half of the second step data
+#define COMPRESS_TEST_PERCENTAGE        99                          //size (in precentage) of compressed output data
 
 #define MSG_TRNG_READY                  "ready"
 #define MSG_TRNG_FINISH                 "finish"
@@ -42,7 +63,7 @@ extern "C" {
 #define MSG_TRNG_TEST_STEP2             "check_step2"
 #define MSG_TRNG_TEST_SUITE_ENDED       "Test_suite_ended"
 
-#define NVKEY                           1
+#define NVKEY                           1                           //NVstore key for storing and loading data
 
 using namespace utest::v1;
 
@@ -57,6 +78,7 @@ static void compress_and_compare(char *key, char *value)
     unsigned char htab[32][32] = {0};
     NVStore &nvstore = NVStore::get_instance();
 
+    /*Output compressed data size is smaller in COMPRESS_TEST_PERCENTAGE from input data*/
     unsigned int out_comp_buf_len = (unsigned int)((BUFFER_LEN *COMPRESS_TEST_PERCENTAGE) / 100);
 
     /*At the begining of step 2 load trng buffer from step 1*/
