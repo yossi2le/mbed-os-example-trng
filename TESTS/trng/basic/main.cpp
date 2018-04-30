@@ -18,6 +18,7 @@
 * The test is based on the assumption that trng will generate random data, random so 
 * there will not be any similar patterns in it, that kind of data will be impossible to
 * compress, if compression will acuur the test will result in failure.
+*
 * The test is composed out of two parts: 
 * the first, generate a trng buffer and try to compress it, at the end of first part 
 * we will reset the device for the second part, in this part we will again generate a 
@@ -27,9 +28,9 @@
 *
 * We need to store and load the first part data before and after reset, the mechanism 
 * we chose is NVstore, mainly because its simplicity and the fact it is not platform 
-* dependent, but in case a specific board does not support NVstore we will use the 
-* mbed greentea platform for sending and receving the data from and to the device to 
-* the host running the test, the problem with this mechanism is that it doesn't handle
+* dependent, in case a specific board does not support NVstore we will use the 
+* mbed greentea platform for sending and receving the data from the device to the
+* host running the test and back, the problem with this mechanism is that it doesn't handle
 * well certain characters, especially non ASCII ones, so we used the base64 algorithm
 * to ensure all characters will be transmitted correctly.
 */
@@ -89,6 +90,7 @@ static void compress_and_compare(char *key, char *value)
         int result = nvstore.get(NVKEY, sizeof(buffer), buffer, actual);
         TEST_ASSERT_EQUAL(NVSTORE_SUCCESS, result);
 #else
+        /*Using base64 to decode data sent from host*/
         string str(b64decode((const void *)value, MSG_VALUE_LEN));
         memcpy(buffer, str.c_str(), BUFFER_LEN);
 #endif
@@ -115,7 +117,8 @@ static void compress_and_compare(char *key, char *value)
 
     trng_free(&trng_obj);
 
-    /*Check if the trng buffer can be compressed - if it can the test will fail*/
+    /*comp_res equals to 0 means that the compress function wasn't able to fit the compressed buffer
+     into out_comp_buf (which is threshold % of buffer), this means that the trng data is random*/
     if (strcmp(key, MSG_TRNG_TEST_STEP1) == 0)
     {
         comp_res = lzf_compress((const void *)buffer, 
@@ -146,7 +149,7 @@ static void compress_and_compare(char *key, char *value)
         int result = nvstore.set(NVKEY, sizeof(buffer), buffer);
         TEST_ASSERT_EQUAL(NVSTORE_SUCCESS, result);
 #else
-        printf("str encode\n");
+        /*Using base64 to encode data sending from host*/
         string str(base64_encode((const unsigned char *)buffer, sizeof(buffer)));
         greentea_send_kv(MSG_TRNG_BUFFER, (const char *)str.c_str());
 #endif
@@ -157,6 +160,7 @@ static void compress_and_compare(char *key, char *value)
     return;
 }
 
+/*This method call first and second steps, it directs by the key received from the host*/
 void trng_test()
 {
     greentea_send_kv(MSG_TRNG_READY, MSG_VALUE_DUMMY);
