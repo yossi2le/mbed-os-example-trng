@@ -139,8 +139,8 @@ static void compress_and_compare(char *key, char *value)
 
     temp_in_buf = NULL;
 
-    TEST_ASSERT_EQUAL_UINT_MESSAGE(0, comp_res, "compression of trng buffer succeeded - test fail!");
-    printf("compression of trng buffer did not succeeded - trng is successful!\n");
+    TEST_ASSERT_EQUAL_UINT_MESSAGE(0, comp_res, "compression of trng buffer was successful - trng buffer is not random!");
+    printf("compression of trng buffer was not successful - trng buffer is indeed random!\n");
 
     /*At the end of step 1 store trng buffer and reset the device*/
     if (strcmp(key, MSG_TRNG_TEST_STEP1) == 0)
