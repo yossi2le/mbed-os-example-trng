@@ -66,6 +66,7 @@ extern "C" {
 
 #define NVKEY                           1                           //NVstore key for storing and loading data
 
+DigitalOut led1(LED1);
 using namespace utest::v1;
 
 static void compress_and_compare(char *key, char *value)
@@ -81,10 +82,22 @@ static void compress_and_compare(char *key, char *value)
 
     /*Output compressed data size is smaller in COMPRESS_TEST_PERCENTAGE from input data*/
     unsigned int out_comp_buf_len = (unsigned int)((BUFFER_LEN *COMPRESS_TEST_PERCENTAGE) / 100);
+    
+    for(int index=0; index < 6; index++){
+        led1 = !led1;
+        printf("blinking here 0\n");
+        wait(1);
+    }
 
     /*At the begining of step 2 load trng buffer from step 1*/
     if (strcmp(key, MSG_TRNG_TEST_STEP2) == 0)
     {
+    
+        for(int index=0; index < 6; index++){
+           led1 = !led1;
+           printf("blinking here 2\n");
+           wait(1);
+        }
 #if NVSTORE_ENABLED
         uint16_t actual = 0;
         int result = nvstore.get(NVKEY, sizeof(buffer), buffer, actual);
@@ -153,7 +166,14 @@ static void compress_and_compare(char *key, char *value)
         string str(base64_encode((const unsigned char *)buffer, sizeof(buffer)));
         greentea_send_kv(MSG_TRNG_BUFFER, (const char *)str.c_str());
 #endif
-        system_reset();
+    
+    for(int index=0; index < 6; index++){
+        led1 = !led1;
+        printf("blinking here\n");
+        wait(1);
+    }
+    
+    system_reset();
         TEST_ASSERT_MESSAGE(false, "system_reset() did not reset the device as expected.");
     }
 
@@ -163,15 +183,15 @@ static void compress_and_compare(char *key, char *value)
 /*This method call first and second steps, it directs by the key received from the host*/
 void trng_test()
 {
+   
     greentea_send_kv(MSG_TRNG_READY, MSG_VALUE_DUMMY);
-
     static char key[MSG_KEY_LEN + 1] = { };
     static char value[MSG_VALUE_LEN + 1] = { };
     memset(key, 0, MSG_KEY_LEN + 1);
     memset(value, 0, MSG_VALUE_LEN + 1);
 
     greentea_parse_kv(key, value, MSG_KEY_LEN, MSG_VALUE_LEN);
-    strcpy(key,MSG_TRNG_TEST_STEP1);
+    //strcpy(key,MSG_TRNG_TEST_STEP1);
     if (strcmp(key, MSG_TRNG_TEST_STEP1) == 0)
     {
         printf("******MSG_TRNG_TEST_STEP1*****\n");
@@ -192,7 +212,7 @@ utest::v1::status_t greentea_failure_handler(const Case *const source, const fai
 }
 
 Case cases[] = {
-    Case("TRNG: trng_test", trng_test, greentea_failure_handler),
+    Case("TRNG: trng_test", trng_test),
 };
 
 utest::v1::status_t greentea_test_setup(const size_t number_of_cases)
@@ -203,15 +223,19 @@ utest::v1::status_t greentea_test_setup(const size_t number_of_cases)
 
 Specification specification(greentea_test_setup, cases, greentea_test_teardown_handler);
 
-DigitalOut led1(LED1);
-
 int main()
 {
+    
+    
     for(int index=0; index < 6; index++){
         led1 = !led1;
+        printf("starting here\n");
         wait(1);
     }
-
+    
+    printf("starting here\n");
+    greentea_send_kv(MSG_TRNG_READY, MSG_VALUE_DUMMY);
+    
     bool ret = !Harness::run(specification);
     greentea_send_kv(MSG_TRNG_TEST_SUITE_ENDED, MSG_VALUE_DUMMY);
 

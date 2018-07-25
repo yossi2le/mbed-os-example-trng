@@ -28,7 +28,6 @@ from mbed_host_tests.host_tests_runner.host_test_default import DefaultTestSelec
 DEFAULT_CYCLE_PERIOD      = 1.0
 MSG_VALUE_DUMMY           = '0'
 MSG_TRNG_READY            = 'ready'
-MSG_TRNG_BUFFER           = 'buffer'
 MSG_TRNG_FINISH           = 'finish'
 MSG_TRNG_TEST_STEP1       = 'check_step1'
 MSG_TRNG_TEST_STEP2       = 'check_step2'
@@ -44,7 +43,6 @@ class TRNGResetTest(BaseHostTest):
         self.reset = False
         self.finish = False
         self.suite_ended = False
-        self.buffer = 0
         cycle_s = self.get_config_item('program_cycle_s')
         self.program_cycle_s = cycle_s if cycle_s is not None else DEFAULT_CYCLE_PERIOD
         self.test_steps_sequence = self.test_steps()
@@ -54,15 +52,8 @@ class TRNGResetTest(BaseHostTest):
     #define callback functions for msg handling
     def setup(self):
         self.register_callback(MSG_TRNG_READY, self.cb_device_ready)
-        self.register_callback(MSG_TRNG_BUFFER, self.cb_trng_buffer)
         self.register_callback(MSG_TRNG_FINISH, self.cb_device_finish)
         self.register_callback(MSG_KEY_TEST_SUITE_ENDED, self.cb_device_test_suit_ended)
-
-    #receive sent data from device before reset
-    def cb_trng_buffer(self, key, value, timestamp):
-        """Acknowledge device rebooted correctly and feed the test execution
-        """
-        self.buffer = value
 
     def cb_device_ready(self, key, value, timestamp):
         """Acknowledge device rebooted correctly and feed the test execution
@@ -101,25 +92,39 @@ class TRNGResetTest(BaseHostTest):
     def test_steps(self):
         """Test step 1
         """
-        wait_for_communication = yield
+        while (True):
+            wait_for_communication = yield
+            if (self.reset == True):
+                self.reset = False  
+                self.send_kv(MSG_TRNG_TEST_STEP1, MSG_VALUE_DUMMY)
+                time.sleep(self.program_cycle_s)
+                break;
+                
+        
+        while (True):
+            wait_for_communication = yield
+            if (self.reset == True):
+                self.reset = False
+                time.sleep(self.program_cycle_s)
+                self.send_kv(MSG_KEY_SYNC, MSG_VALUE_DUMMY)
+                self.send_kv(MSG_TRNG_TEST_STEP2, MSG_VALUE_DUMMY)
+                time.sleep(self.program_cycle_s)
+                self.send_kv(MSG_KEY_SYNC, MSG_VALUE_DUMMY)
+                break;
 
-        self.reset = False
-        self.send_kv(MSG_TRNG_TEST_STEP1, MSG_VALUE_DUMMY)
-        time.sleep(self.program_cycle_s)
-        self.send_kv(MSG_KEY_SYNC, MSG_VALUE_DUMMY)
-
-        wait_for_communication = yield
-
-        if self.reset == False:
-            raise RuntimeError('Phase 1: Platform did not reset as expected.')
-            
-        """Test step 2 (After reset)
-        """
-        self.finish = False
-        self.send_kv(MSG_TRNG_TEST_STEP2, self.buffer)
-        time.sleep(self.program_cycle_s)
-
-        wait_for_communication = yield
+        while (True):
+            wait_for_communication = yield
+            if (self.reset == True):
+                self.send_kv(MSG_TRNG_TEST_STEP2, MSG_VALUE_DUMMY)
+                #time.sleep(self.program_cycle_s)
+                #self.send_kv(MSG_KEY_SYNC, MSG_VALUE_DUMMY)
+                self.reset = False
+                
+            if (self.finish == True):
+               break
+                
+            if (self.suite_ended == True):
+               break
 
         if self.finish == False:
             raise RuntimeError('Test failed.')
@@ -131,3 +136,5 @@ class TRNGResetTest(BaseHostTest):
 
         # The sequence is correct -- test passed.
         yield True
+        
+        
